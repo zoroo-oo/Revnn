@@ -3,104 +3,114 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Revn - Plan Smarter Rides</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+  <title>Revn — Plan Your Ride</title>
   <style>
     body {
       font-family: 'Outfit', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #0f0f0f;
-      color: #fff;
-    }
-    header {
+      background-color: #0f0f0f;
+      color: white;
       padding: 2rem;
-      background: #1a1a1a;
-      text-align: center;
     }
-    header h1 {
-      font-size: 2.5rem;
-      margin: 0;
-      color: #00df8e;
-    }
-    header p {
-      font-size: 1.2rem;
-      margin-top: 0.5rem;
-    }
-    main {
+    .container {
       max-width: 600px;
-      margin: 2rem auto;
+      margin: auto;
+      background-color: #1a1a1a;
       padding: 2rem;
-      background: #1a1a1a;
       border-radius: 12px;
-      box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
-    }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-    label {
-      font-weight: bold;
+      box-shadow: 0 0 12px rgba(0,0,0,0.5);
     }
     input {
+      width: 100%;
       padding: 0.8rem;
+      margin: 0.5rem 0;
+      border-radius: 6px;
       border: none;
-      border-radius: 8px;
       font-size: 1rem;
     }
     button {
-      background: #00df8e;
+      background-color: #00df8e;
       border: none;
-      padding: 1rem;
-      border-radius: 8px;
-      font-weight: bold;
+      padding: 0.8rem 1.2rem;
       font-size: 1rem;
-      color: #000;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.3s;
+      margin-top: 1rem;
     }
-    button:hover {
-      background: #00b46c;
+    #output {
+      margin-top: 2rem;
     }
+    p { line-height: 1.6; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Revn</h1>
-    <p>Plan smarter rides with fuel, distance, and packing checklist</p>
-  </header>
-  <main>
-    <form id="revn-form">
-      <label for="start">Starting Point</label>
-      <input type="text" id="start" required>
+  <div class="container">
+    <h2>Revn Ride Planner</h2>
+    <input type="text" id="start" placeholder="Starting Location" />
+    <input type="text" id="end" placeholder="Destination" />
+    <input type="number" id="economy" placeholder="Mileage (km/l)" />
+    <button onclick="planRide()">Plan My Ride</button>
 
-      <label for="end">Destination</label>
-      <input type="text" id="end" required>
-
-      <label for="economy">Fuel Economy (km/l)</label>
-      <input type="number" id="economy" required>
-
-      <button type="submit">Plan My Ride</button>
-    </form>
-  </main>
+    <div id="output"></div>
+  </div>
 
   <script>
-    document.getElementById("revn-form").addEventListener("submit", function(e) {
-      e.preventDefault();
-      const start = document.getElementById("start").value;
-      const end = document.getElementById("end").value;
-      const economy = document.getElementById("economy").value;
+    const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6Ijg0ZDAwNWNmMTdjMjQyNjVhYWRjMGJmZTFlNWIyNmUzIiwiaCI6Im11cm11cjY0In0=";
 
-      const params = new URLSearchParams({
-        start: start,
-        end: end,
-        economy: economy
+    async function getCoordinates(place) {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(place)}`;
+      const res = await fetch(url, { headers: { 'User-Agent': 'RevnApp/1.0' } });
+      const data = await res.json();
+      if (data.length > 0) return [parseFloat(data[0].lon), parseFloat(data[0].lat)];
+      else throw new Error(`Location not found: ${place}`);
+    }
+
+    async function getDistance(startCoords, endCoords) {
+      const res = await fetch("https://api.openrouteservice.org/v2/directions/driving-car", {
+        method: "POST",
+        headers: {
+          "Authorization": apiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ coordinates: [startCoords, endCoords] })
       });
 
-      window.location.href = "results.html?" + params.toString();
-    });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to fetch route data");
+      }
+
+      const data = await res.json();
+      return data.routes[0].summary.distance / 1000; // km
+    }
+
+    async function planRide() {
+      const start = document.getElementById("start").value;
+      const end = document.getElementById("end").value;
+      const economy = parseFloat(document.getElementById("economy").value);
+      const output = document.getElementById("output");
+
+      output.innerHTML = "Calculating...";
+
+      try {
+        const startCoords = await getCoordinates(start);
+        const endCoords = await getCoordinates(end);
+        const distance = await getDistance(startCoords, endCoords);
+
+        const fuelNeeded = (distance / economy).toFixed(2);
+        const fuelCost = (fuelNeeded * 105).toFixed(2); // ₹105/l
+
+        output.innerHTML = `
+          <p><strong>From:</strong> ${start}</p>
+          <p><strong>To:</strong> ${end}</p>
+          <p><strong>Distance:</strong> ${distance.toFixed(2)} km</p>
+          <p><strong>Fuel Needed:</strong> ${fuelNeeded} L</p>
+          <p><strong>Estimated Fuel Cost:</strong> ₹${fuelCost}</p>
+          <p><strong>Checklist:</strong> Helmet, Jacket, Powerbank, First Aid, Vehicle Documents</p>
+        `;
+      } catch (error) {
+        output.innerHTML = `<p style="color: red;">❌ ${error.message}</p>`;
+      }
+    }
   </script>
 </body>
 </html>
-
